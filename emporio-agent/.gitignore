@@ -1,0 +1,14 @@
+# Secrets
+.env
+
+# Runtime data written by the agent
+data/sessions/
+data/outbox/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/

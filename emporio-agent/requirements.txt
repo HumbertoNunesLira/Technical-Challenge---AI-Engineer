@@ -1,0 +1,20 @@
+# LLM providers
+anthropic>=0.40
+openai>=1.50
+
+# Data and business rules
+pandas>=2.2
+rapidfuzz>=3.9
+holidays>=0.60
+tzdata>=2024.1
+
+# Config and test fixtures
+python-dotenv>=1.0
+pyyaml>=6.0
+
+# Dev tools
+pytest>=8.0
+ruff>=0.6
+
+# The project itself, installed in editable mode (src layout)
+-e .
