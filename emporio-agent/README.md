@@ -10,7 +10,7 @@ instruments store in Campo Grande/MS, using the store's data (CSVs) and its poli
 
 - [x] Project skeleton and raw data
 - [x] Data loading and data quality report
-- [ ] Business rules: pricing, PIX, installments, store hours, return windows
+- [x] Business rules: pricing, PIX, installments, store hours, return windows
 - [ ] Policy sections and policy lookup
 - [ ] Agent tools with order verification
 - [ ] System prompt, LLM adapter and agent loop
@@ -58,3 +58,23 @@ code (`src/emporio/data.py`) and every detectable issue is printed by the data q
 Known limit of the description check: it compares brands and string/key counts only. For
 example, products 139 and 140 also name a different shell wood than their specs; they are
 already flagged by brand, but a wood-only contradiction would not be caught.
+
+### Business rules
+
+Implemented as pure, table-tested functions in `money.py`, `store_hours.py` and `returns.py`.
+The model never computes a number the customer sees.
+
+| Rule or gap in the manual | Interpretation in code |
+|---|---|
+| Installments: the payment table says "up to 12x, minimum R$ 100", while section 3.1 has tiers | Section 3.1 prevails because it is more specific: minimum installment R$ 50 up to 3x, R$ 80 from 4x to 6x, R$ 100 from 7x to 12x. |
+| Section 3.1: "no minimum installment (except below R$ 50)" for up to 3x | Read as a R$ 50 minimum installment up to 3x. A purchase below R$ 50 is paid in a single installment. |
+| Installments on promoted items | Computed on the final (promotional) price. |
+| PIX 5% discount does not stack with promotions | PIX price = 5% off the list price, only for products without an active promotion. |
+| Rounding | All amounts are rounded to cents with ROUND_HALF_UP. |
+| Store closed on "Domingo e Feriados", but the manual has no holiday list | National public holidays plus Mato Grosso do Sul state holidays from the `holidays` package (`Brazil(subdiv="MS")`). Optional days (Carnival, Corpus Christi) and Campo Grande municipal holidays are not covered. Extended hours on special dates are not modeled. |
+| Opening hours boundaries | Open from the opening time up to, but excluding, the closing time: at 18:00 sharp on a weekday the store is closed. Times use the America/Campo_Grande time zone (UTC-4). |
+| No real delivery date in the data | For delivered orders, the receipt date is `estimated_delivery`; the agent tells the customer it is an estimate. |
+| Regret window, "7 days after receipt" | Counted in calendar days and inclusive: on day 7 the window is still open. Applies to every order, since all orders are deliveries (online purchases). |
+| Defect window, "30 days after the purchase" | Counted from `order_date`, inclusive. |
+| Legal warranty, "90 days from receipt" | Counted from the estimated receipt date, inclusive. |
+| Orders not delivered yet (pending, confirmed, shipped, cancelled) | No window is open; windows start at receipt. |
