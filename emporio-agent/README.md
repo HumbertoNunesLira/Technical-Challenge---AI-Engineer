@@ -11,7 +11,7 @@ instruments store in Campo Grande/MS, using the store's data (CSVs) and its poli
 - [x] Project skeleton and raw data
 - [x] Data loading and data quality report
 - [x] Business rules: pricing, PIX, installments, store hours, return windows
-- [ ] Policy sections and policy lookup
+- [x] Policy sections and policy lookup
 - [ ] Agent tools with order verification
 - [ ] System prompt, LLM adapter and agent loop
 - [ ] CLI chat with persistent sessions
@@ -78,3 +78,35 @@ The model never computes a number the customer sees.
 | Defect window, "30 days after the purchase" | Counted from `order_date`, inclusive. |
 | Legal warranty, "90 days from receipt" | Counted from the estimated receipt date, inclusive. |
 | Orders not delivered yet (pending, confirmed, shipped, cancelled) | No window is open; windows start at receipt. |
+
+### Policies
+
+The policy PDF stays untouched in `data/raw/`. `data/policies/` holds a faithful markdown copy
+split by topic, and `get_policy(topic)` returns one topic at a time, so the model reads only
+the section a question needs. Wording is kept as in the manual; only formatting changed, and
+section numbers were dropped from headings so the agent does not cite "section 3" to customers.
+
+| Topic | Manual sections |
+|---|---|
+| `store_info` | Cover (slogan, address, contacts) and 1. About, mission, company data |
+| `hours` | 2. Opening hours |
+| `payment` | 3. Payment methods and installment rules |
+| `returns` | 4. Exchanges and returns |
+| `shipping` | 5. Shipping and delivery |
+| `promotions` | 6. Promotions and discounts |
+| `warranty` | 8. Warranty |
+| `privacy` | 9. Privacy and data protection (LGPD) |
+| `scope_and_tone` | 7. WhatsApp service guidelines, standard flow, special situations, and 10. Final provisions |
+
+Where the manual contradicts itself or could mislead the agent, a clearly marked
+**Editorial note (not part of the original manual)** at the top of the file says what prevails:
+
+| File | Editorial note |
+|---|---|
+| `payment.md` | Section 3.1 prevails over the summary table; minimum installment R$ 50 up to 3x; PIX does not stack with promotions. |
+| `store_info.md` | Use phone (67) 3341-4444 and `contato@emporiodamusica.com.br`: both appear on the manual's cover, and the phone also in the company table; the accented e-mail domain is treated as a typo. "Over 300 instruments" is not the catalog: availability comes from the data. |
+| `scope_and_tone.md` | The WhatsApp number (67) 3321-4500 in section 7 conflicts with the company data; use (67) 3341-4444. No partner stores are listed, so the agent never names one. |
+| `promotions.md` | The campaign calendar is not a promise: only promotions active in the data apply; never announce future or expired discounts. |
+
+Section 10 (final provisions) was placed in `scope_and_tone` because its rule, "ask the
+management when in doubt", is what the agent turns into a human handoff.
