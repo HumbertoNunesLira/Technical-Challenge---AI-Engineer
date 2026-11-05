@@ -30,6 +30,10 @@ copy .env.example .env             # Windows  (macOS/Linux: cp .env.example .env
 python -m emporio chat             # start chatting (in Portuguese)
 ```
 
+**Windows tip:** keep the project in a short path (for example `C:\dev\`) or enable long path
+support. The `anthropic` SDK ships files with very long names, and a deep folder can exceed
+the 260-character path limit during `pip install` (found during the clean-clone check).
+
 Inside the chat: `/reset` clears the conversation, `/quit` exits. Run
 `python -m emporio chat SESSION_ID` to resume a conversation after a restart.
 
@@ -324,18 +328,29 @@ checked, only tracking codes); there is no LLM judge for tone yet.
 **Tools.** Claude (chat) to study the challenge with me, debate the approach and write the
 build plan; Claude Code (Claude Opus 5.5, in VS Code) to implement it step by step.
 
+**My role: the ideas, the plan and the decisions; the assistant as an implementer I
+directed and questioned.** I was on top of every step: I brought the idea, discussed and
+debated the approach before any code was written, reviewed what came back, and changed
+course whenever I disagreed.
+
 **Workflow.**
-1. I read the challenge and the data, then wrote a build plan with explicit decisions: the
-   architecture, the 20 data traps and the rule for each, the tools, a scenario table and
-   the README checklist.
-2. I gave Claude Code one step at a time, with rules: propose a plan and wait for my OK,
-   never invent store facts, run the tests and show the output, explain the design and ask
-   me two interview-style questions, and list every assumption.
-3. One branch and one pull request per step. **I made every commit, push, pull request and
-   merge myself**; the assistant only suggested commit messages and wrote the PR
-   descriptions. The commit history and the PRs show the progress step by step.
-4. The README was updated at the end of every step, while the decisions were fresh.
-5. I kept a private study file with the design points and interview questions of each step.
+1. **Idea and plan.** I read the challenge and the data and debated the approach (function
+   calling vs RAG, text-to-SQL or a framework; which model; how to verify identity). Then I
+   wrote a build plan with explicit decisions: the architecture, the 20 data traps and the
+   rule for each, the six tools, a scenario table and the README checklist.
+2. **One step at a time, under my rules.** For each step the assistant had to propose a plan
+   and wait for my OK, never invent store facts, run the tests and show the output, explain
+   the design, ask me two interview-style questions, and list every assumption.
+3. **Discussion before acceptance.** I did not accept proposals blindly: I asked why before
+   agreeing (why markdown files instead of reading the PDF, why not RAG, why a text-only
+   history, whether a Portuguese prompt would be better, whether the agent resists malicious
+   prompts and floods), and several of those questions changed the result.
+4. **Control of the repository.** One branch and one pull request per step, and **I made
+   every commit, push, pull request and merge myself**; the assistant suggested commit
+   messages and drafted PR descriptions. The commit history and the PRs show the progress.
+5. **Documentation while fresh.** The README was updated at the end of every step, and I kept
+   a private study file with the design points and interview questions of each step, so I
+   can explain and defend every part of the code.
 
 **Suggestions I accepted:** moving the raw data to `data/raw/` and making the package
 installable; splitting the manual into topic files (after asking why markdown and not the
@@ -359,9 +374,12 @@ real model, required to pass twice in a row; reading every generated example tra
 checking each amount against the CSVs (this found two agent bugs, fixed and regenerated,
 never edited by hand); and reading the diffs before each commit.
 
-**What I did not delegate:** the plan and the architecture choice, the data rules (section
-5), scope decisions (what to build and what to drop), and every git operation.
+**What I did not delegate:** the idea and the plan, the architecture choice, the data rules
+(section 5), scope decisions (what to build, what to drop, what to add instead), the review
+of every step, and every git operation.
 
-**Honest summary:** the assistant wrote most of the code. I directed it with a written plan
-and acceptance criteria, reviewed each step, questioned the decisions I did not understand,
-and changed course where I disagreed.
+**Honest summary:** the ideas, the plan and the decisions are mine; the assistant typed most
+of the code. I directed it with a written plan and acceptance criteria, discussed and
+debated each step, reviewed the results, and changed course where I disagreed. I see this as
+the way I want to work as an AI engineer: owning the design and the verification, and using
+the assistant to move fast on the implementation.
