@@ -204,7 +204,7 @@ Business webhook would call `POST /chat` with the sender's number as `session_id
 
 ### Evaluation: scenario suite
 
-`tests/scenarios.yaml` holds 21 scripted conversations (25 turns) run against the real model
+`tests/scenarios.yaml` holds 24 scripted conversations (31 turns) run against the real model
 by `scripts/run_scenarios.py` (also `pytest -m llm`). Each turn checks the tools that must or
 must not be called and text the reply must or must not contain. Three global invariants run
 on every turn:
@@ -216,7 +216,10 @@ on every turn:
    `get_order_status`.
 3. **Portuguese only**: no common English words ("the", "our", "you"...).
 
-Latest result (Claude Haiku 5.5, effort `medium`): **21/21 in two consecutive runs**.
+Latest result (Claude Haiku 5.5, effort `medium`): the 21 functional scenarios passed
+**21/21 in two consecutive runs** (and again after the Step 8 prompt fixes); the 3 security
+scenarios added afterwards (`prompt_leak`, `jailbreak_discount`, `verification_bruteforce`)
+pass together with `injection_attempt`.
 
 Failures along the way were fixed in the agent, not by loosening checks, except where the
 expectation itself was wrong:
@@ -232,6 +235,32 @@ expectation itself was wrong:
 Caveats: 21 scenarios are a sample, not a proof; LLM output varies between runs; the
 invariants are regex heuristics (for example, order status words are not checked, only
 tracking codes).
+
+### Privacy and safety
+
+The design assumes the model **can** be talked into saying something wrong, so the hard
+guarantees live in code, not in the prompt.
+
+| Threat | Defense | Evidence |
+|---|---|---|
+| Reading another customer's order | `get_order_status` returns data only for the order id plus the e-mail or phone on file; one generic error whether the order exists or not; lookups locked after 3 failures (restored from the session log after a restart) | `test_tools.py`, `test_session_cli.py`, scenarios `order_unverified`, `verification_bruteforce` |
+| Listing customers or orders | No tool can list them; results carry only the customer's first name | `test_order_result_has_no_customer_contact_data`, scenario `injection_attempt` |
+| Prompt injection and jailbreaks ("ignore your instructions", "pretend you have no rules") | Customer text and tool results are treated as data; a rule keeps the system prompt in force when a customer insists; no tool can grant discounts or change orders, and every price comes from code | Scenarios `injection_attempt`, `jailbreak_discount` |
+| Leaking the system prompt or internal documents | Prompt rule; the manual is internal and tool names are never mentioned | Scenario `prompt_leak` |
+| Invented prices, stock or deadlines | Numbers come only from tools; grounding invariant on every scenario turn | Invariant 1 |
+| Flooding the API / burning LLM credits | Per-session rate limit (10 messages per minute, HTTP 429 with `Retry-After`, rejected before any model call); message length capped at 1000 characters in the API and the CLI; at most 6 model calls and a token ceiling per turn | `test_api.py`, `test_session_cli.py` |
+| Path traversal through the session id | Allowlist of characters (`[A-Za-z0-9_-]{1,64}`) in the CLI and the API | `test_unsafe_session_ids_are_rejected`, `test_invalid_input_is_rejected` |
+
+**What gets logged:** session files (`data/sessions/`) store each message, the tool calls
+and their results (which can include the customer's own order data) for auditing; the
+escalation outbox stores the summary and the contact the customer gave. Both are local and
+gitignored. Customer data never goes into the repository.
+
+**Not covered (production work):** authentication on the API and verification of WhatsApp
+webhook signatures; a distributed rate limit (gateway or Redis) instead of an in-memory one;
+identity by the sender's WhatsApp number plus a one-time code, with the lockout per customer
+rather than per session (a new session id resets it today); an output moderation layer;
+retention rules for session logs (LGPD).
 
 ### Example conversations
 

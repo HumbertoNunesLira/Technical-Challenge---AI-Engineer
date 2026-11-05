@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from emporio.api import app, get_agent_llm, get_store
+from emporio.api import RateLimiter, app, get_agent_llm, get_rate_limiter, get_store
 from emporio.llm import FakeLLM
 from emporio.session import SessionStore
 
@@ -11,8 +11,10 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("AGENT_NOW", "2026-03-23T10:00:00")
     store = SessionStore(tmp_path / "sessions")
     llm = FakeLLM([])
+    limiter = RateLimiter(limit=3, window_s=60)
     app.dependency_overrides[get_store] = lambda: store
     app.dependency_overrides[get_agent_llm] = lambda: llm
+    app.dependency_overrides[get_rate_limiter] = lambda: limiter
     with TestClient(app) as test_client:
         test_client.store, test_client.llm = store, llm
         yield test_client
@@ -61,6 +63,29 @@ def test_llm_failure_returns_502_and_stores_nothing(client):
     assert response.status_code == 502
     assert "unavailable" in response.json()["detail"]
     assert client.store.records("s2") == []
+
+
+def test_flood_is_rejected_before_calling_the_model(client):
+    client.llm.script = ["1", "2", "3"]
+    codes = [
+        client.post("/chat", json={"session_id": "flood", "message": "oi"}).status_code
+        for _ in range(5)
+    ]
+    assert codes == [200, 200, 200, 429, 429]
+    assert len(client.llm.requests) == 3  # the rejected requests never reached the LLM
+    rejected = client.post("/chat", json={"session_id": "flood", "message": "oi"})
+    assert int(rejected.headers["Retry-After"]) >= 1
+    # Another session is not affected.
+    client.llm.script.append("ok")
+    assert client.post("/chat", json={"session_id": "other", "message": "oi"}).status_code == 200
+
+
+def test_rate_limiter_window_slides():
+    now = [0.0]
+    limiter = RateLimiter(limit=2, window_s=60, clock=lambda: now[0])
+    assert [limiter.retry_after("a") for _ in range(3)] == [0, 0, 61]
+    now[0] = 60.0
+    assert limiter.retry_after("a") == 0  # the oldest hits left the window
 
 
 def test_delete_session_resets_it(client):
