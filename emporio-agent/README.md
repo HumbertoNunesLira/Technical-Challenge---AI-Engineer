@@ -16,7 +16,7 @@ instruments store in Campo Grande/MS, using the store's data (CSVs) and its poli
 - [x] System prompt, LLM adapter and agent loop
 - [x] CLI chat with persistent sessions
 - [x] Scenario suite
-- [ ] Example conversations
+- [x] Example conversations
 - [ ] (Optional) FastAPI endpoint
 - [ ] (Optional) Model comparison
 - [ ] Final README
@@ -35,6 +35,7 @@ python -m emporio chat SESSION_ID          # resume a session; /reset clears it,
 pytest -q                                  # unit tests (no network, no API key needed)
 pytest -m llm -s                           # smoke checks + scenario suite, real model (needs a key)
 python scripts/run_scenarios.py            # scenario suite with a pass/fail table and transcripts
+python scripts/run_examples.py             # regenerate the example conversations in examples/
 ruff check .                               # lint
 python scripts/data_quality_report.py      # every data issue detected in the CSVs
 ```
@@ -208,3 +209,24 @@ expectation itself was wrong:
 Caveats: 21 scenarios are a sample, not a proof; LLM output varies between runs; the
 invariants are regex heuristics (for example, order status words are not checked, only
 tracking codes).
+
+### Example conversations
+
+Five conversations in [`examples/`](examples/), generated from real runs by
+`scripts/run_examples.py` (each with its own simulated clock) and never edited by hand. Each
+file starts with an English header (date, model, tools called, why it matters) followed by
+the transcript in Portuguese, with the tool calls of each turn shown as notes.
+
+| File | What it shows | Non-trivial |
+|---|---|---|
+| [`01_catalogo_e_preco.md`](examples/01_catalogo_e_preco.md) | Catalog search with a price filter, a loosely typed name, PIX and installments, an active promotion | |
+| [`02_devolucao_no_prazo.md`](examples/02_devolucao_no_prazo.md) | Returns policy, identity verification, the 7-day regret window applied to order 5, escalation with a protocol | Yes |
+| [`03_pedido_atrasado_e_reclamacao.md`](examples/03_pedido_atrasado_e_reclamacao.md) | Verification asked before any order data, a late shipped order, tracking code, complaint, escalation and protocol reuse | Yes |
+| [`04_estoque_e_promocao_expirada.md`](examples/04_estoque_e_promocao_expirada.md) | Out-of-stock and discontinued items with alternatives, an expired Black Friday discount not promised | |
+| [`05_escopo_e_privacidade.md`](examples/05_escopo_e_privacidade.md) | Store info, accessories and off-topic redirects, an unverified order lookup, a prompt injection refused | |
+
+Reading the first generated batch critically found two agent problems, fixed in the prompt
+and regenerated (not edited): after a complaint the agent opened a second escalation and
+called the first protocol wrong (it now reuses protocols it already gave), and it claimed the
+store sells woodwinds and orchestral strings, which have no products (the prompt now lists the
+instrument families computed from the catalog data).
