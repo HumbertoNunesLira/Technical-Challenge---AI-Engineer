@@ -13,7 +13,7 @@ instruments store in Campo Grande/MS, using the store's data (CSVs) and its poli
 - [x] Business rules: pricing, PIX, installments, store hours, return windows
 - [x] Policy sections and policy lookup
 - [x] Agent tools with order verification
-- [ ] System prompt, LLM adapter and agent loop
+- [x] System prompt, LLM adapter and agent loop
 - [ ] CLI chat with persistent sessions
 - [ ] Scenario suite
 - [ ] Example conversations
@@ -30,10 +30,16 @@ python -m venv .venv
 .venv\Scripts\activate            # Windows (on macOS/Linux: source .venv/bin/activate)
 pip install -r requirements.txt   # also installs the project in editable mode
 
-pytest -q                                  # unit tests
+pytest -q                                  # unit tests (no network, no API key needed)
+pytest -m llm -s                           # smoke checks against the real model (needs a key)
 ruff check .                               # lint
 python scripts/data_quality_report.py      # every data issue detected in the CSVs
 ```
+
+Copy `.env.example` to `.env` and set `ANTHROPIC_API_KEY`. Optional variables:
+`LLM_MODEL` (default `claude-haiku-5-5`), `LLM_EFFORT` (default `medium`), `AGENT_NOW`
+(ISO datetime for the agent clock, e.g. `2026-03-22T15:00:00`; empty means real time) and
+`SHOW_TOOLS`.
 
 ## Assumptions and data issues (draft)
 
@@ -139,3 +145,21 @@ dd/mm/yyyy, so the model quotes instead of computing); errors are
 | Customer data in results | Only the customer's first name (to greet them) and the order's own data. Never e-mail, phone, full name or other customers. |
 | Delayed orders | `delivery_overdue` is true for a shipped order past its estimated delivery (order 8). |
 | Escalation | Protocol `EMP-YYYYMMDD-XXXXXX`; the record (reason, summary, order id, contact, session) goes to a local JSONL outbox that is gitignored. |
+
+### Agent loop, prompt and model
+
+`agent.run_turn(conversation, message)`: build the system prompt with the agent clock, call
+the model with the six tool schemas, run every requested tool and send all results back in
+one message, repeat until a text reply or 6 iterations (then a safe fallback reply). Tool
+errors and LLM failures never crash the chat; a refusal gets a polite fixed reply.
+
+| Decision | Choice and reason |
+|---|---|
+| Model | Claude Haiku 5.5 (`claude-haiku-5-5`) through the official `anthropic` SDK. The task is short tool-calling turns in Portuguese over small data, where speed and cost matter and the hard parts (math, rules, verification) are in code. |
+| Sampling | No `temperature`. The plan said 0.2, but Claude Haiku 5.5 rejects sampling parameters with a 400. Consistency comes from the prompt, deterministic tools and the scenario checks. |
+| Effort | `output_config.effort = "medium"` (the model's default), configurable with `LLM_EFFORT`. Adaptive thinking is always on for this model. |
+| `max_tokens` | 16000 as a safety ceiling instead of the planned ~700: thinking tokens count toward the cap, so a small cap could cut a reply off. Reply length is set by the prompt. |
+| History between turns | Only the customer's messages and the final replies are kept (last 20 messages, starting with a customer message). Tool calls, tool results and thinking blocks stay inside the turn that produced them. Prices, stock and order data are therefore re-fetched every turn (no stale quotes, no verified order data lingering), and the request stays valid for the model's thinking-block check: replaying old thinking blocks after the system prompt (which carries the time) or the history window changes would be rejected. |
+| Tool execution | Requested tools run one after another: they are local and take milliseconds, so threads would add a race on the verification counter for no gain. All results still go back in a single message, as the API expects. |
+| Prompt | English instructions, Portuguese replies. Store facts needed in almost every chat (address, contacts, scope) live in the prompt; everything else must come from a tool. Rules cover the data-vs-policy decision, promotions, unavailable items, returns, delays, complaints, accessories, off-topic requests, privacy and prompt injection, plus a line that keeps the rules in force when a customer insists. Plain text only, since WhatsApp does not render Markdown. |
+| Testability | `FakeLLM` replays scripted responses, so the loop is tested without network. Real-model checks are marked `llm` and deselected by default. |
