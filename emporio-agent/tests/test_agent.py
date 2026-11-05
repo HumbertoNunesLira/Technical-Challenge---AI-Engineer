@@ -138,6 +138,9 @@ def test_system_prompt_has_clock_and_store_facts():
     assert "(67) 3341-4444" in prompt
     assert "contato@emporiodamusica.com.br" in prompt
     assert "Brazilian Portuguese" in prompt
+    # Families come from the data: woodwinds, brass and orchestral strings have no products.
+    assert "Violões" in prompt and "Ukuleles" in prompt
+    assert "Sopro" not in prompt and "Orquestrais" not in prompt
 
 
 def test_agent_now_from_environment(monkeypatch):
