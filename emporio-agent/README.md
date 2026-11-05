@@ -15,7 +15,7 @@ instruments store in Campo Grande/MS, using the store's data (CSVs) and its poli
 - [x] Agent tools with order verification
 - [x] System prompt, LLM adapter and agent loop
 - [x] CLI chat with persistent sessions
-- [ ] Scenario suite
+- [x] Scenario suite
 - [ ] Example conversations
 - [ ] (Optional) FastAPI endpoint
 - [ ] (Optional) Model comparison
@@ -33,7 +33,8 @@ pip install -r requirements.txt   # also installs the project in editable mode
 python -m emporio chat                     # chat in the terminal (new session)
 python -m emporio chat SESSION_ID          # resume a session; /reset clears it, /quit exits
 pytest -q                                  # unit tests (no network, no API key needed)
-pytest -m llm -s                           # smoke checks against the real model (needs a key)
+pytest -m llm -s                           # smoke checks + scenario suite, real model (needs a key)
+python scripts/run_scenarios.py            # scenario suite with a pass/fail table and transcripts
 ruff check .                               # lint
 python scripts/data_quality_report.py      # every data issue detected in the CSVs
 ```
@@ -176,3 +177,34 @@ errors and LLM failures never crash the chat; a refusal gets a polite fixed repl
 | Context window | The last 20 messages, starting with a customer message. Because tool data never enters the stored history, a tool call can never be separated from its result. |
 | Lockout across restarts | The failed order verifications are counted from the session log on load, so closing and reopening the chat does not reset the 3-attempt lockout. `/reset` starts a new conversation and does reset it. |
 | Session ids | Only letters, digits, `-` and `_` (1 to 64 characters), since the id becomes a file name; this blocks path traversal such as `../`. |
+
+### Evaluation: scenario suite
+
+`tests/scenarios.yaml` holds 21 scripted conversations (25 turns) run against the real model
+by `scripts/run_scenarios.py` (also `pytest -m llm`). Each turn checks the tools that must or
+must not be called and text the reply must or must not contain. Three global invariants run
+on every turn:
+
+1. **Grounded money**: every R$ amount in the reply appears in a tool result of the same
+   turn, in the customer's own message, or in a short allowlist of policy amounts
+   (35, 50, 80, 100, 500, 2000).
+2. **No order data before verification**: no tracking code appears before a successful
+   `get_order_status`.
+3. **Portuguese only**: no common English words ("the", "our", "you"...).
+
+Latest result (Claude Haiku 5.5, effort `medium`): **21/21 in two consecutive runs**.
+
+Failures along the way were fixed in the agent, not by loosening checks, except where the
+expectation itself was wrong:
+
+| Failure | Cause | Fix |
+|---|---|---|
+| Out-of-window return did not mention the 90-day legal warranty | Agent | Prompt: when the regret window is closed but the legal warranty applies, say so |
+| Asked for the order number again although the customer had given it | Agent | Prompt: reuse details the customer already gave |
+| First sentence of a reply in English ("no saxofone in our catalog") | Agent, influenced by English tool notes | Prompt: translate tool results, every sentence in Portuguese; new invariant 3 |
+| "Previsão de entrega" not accepted as disclosing the estimated date; refund term given in turn 1 instead of turn 2 | Expectation too narrow | Accept both wordings; check the deadline date in turn 2 |
+| "Fora do catálogo" not accepted as "discontinued" | Expectation too narrow | Regex widened |
+
+Caveats: 21 scenarios are a sample, not a proof; LLM output varies between runs; the
+invariants are regex heuristics (for example, order status words are not checked, only
+tracking codes).
