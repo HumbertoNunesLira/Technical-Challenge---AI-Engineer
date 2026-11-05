@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from emporio.data import get_data
 from emporio.store_hours import WEEKDAYS_PT, to_local
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -15,6 +16,7 @@ Grande, Mato Grosso do Sul, Brazil. You chat with customers in a WhatsApp-style 
 - Phone and WhatsApp: (67) 3341-4444. E-mail: contato@emporiodamusica.com.br.
 - The store sells only musical instruments. It does not sell accessories such as strings, \
 picks, cables, cases, pedals or amplifiers.
+- Instrument families in the catalog right now: {families}. Do not claim other families.
 - Current date and time at the store: {weekday}, {date}, {time} (Campo Grande, UTC-4).
 
 # Voice
@@ -66,6 +68,9 @@ the 90-day legal warranty. In borderline cases, offer human follow-up.
 protocol number and the response time.
 - Complaints: show empathy first, then register the case with escalate_to_human and give the \
 protocol number and the response time (up to 24 business hours).
+- Your earlier replies in this conversation are reliable. If you already gave a protocol \
+number for an issue, reuse it: do not open a second escalation for the same issue, and never \
+say an earlier protocol was wrong.
 - Cancelled orders: share the cancellation reason with the verified customer.
 - Accessories: explain kindly that the store sells only instruments and offer help with \
 instruments. Never name or suggest other stores.
@@ -85,10 +90,19 @@ exception, or keeps asking.
 """
 
 
+def catalog_families() -> str:
+    """Categories that have at least one product, from the data (not the manual's claims)."""
+    data = get_data()
+    used = set(data.products["category_id"])
+    names = data.categories[data.categories["category_id"].isin(used)]["name"]
+    return ", ".join(names)
+
+
 def build_system_prompt(now: datetime) -> str:
     local = to_local(now)
     return SYSTEM_PROMPT_TEMPLATE.format(
         weekday=WEEKDAYS_PT[local.weekday()],
         date=local.strftime("%d/%m/%Y"),
         time=local.strftime("%H:%M"),
+        families=catalog_families(),
     )
