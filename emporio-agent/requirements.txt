@@ -8,6 +8,11 @@ rapidfuzz>=3.9
 holidays>=0.60
 tzdata>=2024.1
 
+# Optional HTTP API (httpx is used by FastAPI's TestClient)
+fastapi>=0.110
+uvicorn>=0.29
+httpx>=0.27
+
 # Config and test fixtures
 python-dotenv>=1.0
 pyyaml>=6.0

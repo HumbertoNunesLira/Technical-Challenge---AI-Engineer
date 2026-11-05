@@ -17,7 +17,7 @@ instruments store in Campo Grande/MS, using the store's data (CSVs) and its poli
 - [x] CLI chat with persistent sessions
 - [x] Scenario suite
 - [x] Example conversations
-- [ ] (Optional) FastAPI endpoint
+- [x] (Optional) FastAPI endpoint
 - [ ] (Optional) Model comparison
 - [ ] Final README
 
@@ -36,6 +36,7 @@ pytest -q                                  # unit tests (no network, no API key 
 pytest -m llm -s                           # smoke checks + scenario suite, real model (needs a key)
 python scripts/run_scenarios.py            # scenario suite with a pass/fail table and transcripts
 python scripts/run_examples.py             # regenerate the example conversations in examples/
+uvicorn emporio.api:app --reload           # optional HTTP API on http://127.0.0.1:8000 (docs at /docs)
 ruff check .                               # lint
 python scripts/data_quality_report.py      # every data issue detected in the CSVs
 ```
@@ -178,6 +179,28 @@ errors and LLM failures never crash the chat; a refusal gets a polite fixed repl
 | Context window | The last 20 messages, starting with a customer message. Because tool data never enters the stored history, a tool call can never be separated from its result. |
 | Lockout across restarts | The failed order verifications are counted from the session log on load, so closing and reopening the chat does not reset the 3-attempt lockout. `/reset` starts a new conversation and does reset it. |
 | Session ids | Only letters, digits, `-` and `_` (1 to 64 characters), since the id becomes a file name; this blocks path traversal such as `../`. |
+
+### Optional HTTP API
+
+`src/emporio/api.py` exposes the same agent and session store over FastAPI:
+
+| Endpoint | Behavior |
+|---|---|
+| `POST /chat` `{session_id, message}` | Runs one turn and returns `{session_id, reply, tool_calls}` (tool names and arguments only, never result data) |
+| `GET /health` | `{"status": "ok"}` |
+| `DELETE /sessions/{session_id}` | Resets the conversation (204) |
+
+```bash
+curl -X POST http://127.0.0.1:8000/chat -H "Content-Type: application/json" \
+  -d '{"session_id": "5567999990000", "message": "Quanto custa o Takamine GD20?"}'
+```
+
+Input is validated with Pydantic (non-empty message up to 1000 characters; session id with
+the same safe pattern as the CLI). Requests for the same session are serialized with a
+per-session lock, so turns are stored in order. If the LLM provider fails, the API returns a
+502 with a short message and does not store the failed turn. **WhatsApp path:** a WhatsApp
+Business webhook would call `POST /chat` with the sender's number as `session_id` and send
+`reply` back through the WhatsApp API.
 
 ### Evaluation: scenario suite
 
