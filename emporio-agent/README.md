@@ -12,7 +12,7 @@ instruments store in Campo Grande/MS, using the store's data (CSVs) and its poli
 - [x] Data loading and data quality report
 - [x] Business rules: pricing, PIX, installments, store hours, return windows
 - [x] Policy sections and policy lookup
-- [ ] Agent tools with order verification
+- [x] Agent tools with order verification
 - [ ] System prompt, LLM adapter and agent loop
 - [ ] CLI chat with persistent sessions
 - [ ] Scenario suite
@@ -110,3 +110,32 @@ Where the manual contradicts itself or could mislead the agent, a clearly marked
 
 Section 10 (final provisions) was placed in `scope_and_tone` because its rule, "ask the
 management when in doubt", is what the agent turns into a human handoff.
+
+### Agent tools
+
+Six tools in `src/emporio/tools.py`. The model picks the tool and its arguments; Python does
+the filtering, math, date logic and identity checks. Each schema says what the tool is for
+**and when not to use it**. Results are structured data (money as `R$ 1.299,00`, dates as
+dd/mm/yyyy, so the model quotes instead of computing); errors are
+`{"error": code, "message": text}` and never crash the agent.
+
+| Tool | Use it for | Behavior |
+|---|---|---|
+| `search_products` | Browsing by category, string type, electronics, price range or text | Available items only by default, cheapest first, at most 5 (max 10), with the total match count and how many unavailable matches were hidden |
+| `get_product` | One named product: price, promotion, PIX, installments, stock | Fuzzy name match; returns candidates when ambiguous; flags discontinued, coming soon and out of stock, with up to 3 in-stock alternatives |
+| `get_order_status` | Status, items, total, payment, tracking, delivery, return windows | Needs the order id plus the e-mail or phone on file; one generic error on failure; locked after 3 failures |
+| `get_policy` | Store rules by topic | Topic is a closed enum of the nine policy files |
+| `get_store_status` | Open right now? Next opening? | Store time zone, the agent clock and holidays |
+| `escalate_to_human` | Complaints, delays, defects, anything unresolved | Appends to `data/outbox/escalations.jsonl` and returns a protocol id with the 24 business hours promise |
+
+| Decision | Rule in code |
+|---|---|
+| Price filters ("até R$ 1000") | Applied to the **final** price, which is what the customer pays. |
+| Loose product names ("gd20", "takamine gd 20") | Names are normalized (accents, case, punctuation) and generic words such as "violão" are dropped. The score is the best of a squashed-string partial match and a token-set match (rapidfuzz). Below 80 means not found. If several products score within 5 points of the best, the customer is asked to choose (e.g. "Martin D-28" matches both the D-28 and the D-28E). |
+| Alternatives for unavailable products | In-stock products of the same category, narrowed step by step to the same string type, the same 7-string format and the same electronics when such products exist, then closest price first. |
+| Unreliable descriptions | Withheld from tool results, with a note. |
+| Installments | `get_product` returns every allowed option (1x to the maximum) with its value, so the model never divides. |
+| Order verification | The e-mail is compared case-insensitively; the phone by digits only, ignoring punctuation and the +55 country code. A wrong contact and a nonexistent order get the same message, so the tool never reveals whether an order exists. Three failures lock order lookups for the conversation. |
+| Customer data in results | Only the customer's first name (to greet them) and the order's own data. Never e-mail, phone, full name or other customers. |
+| Delayed orders | `delivery_overdue` is true for a shipped order past its estimated delivery (order 8). |
+| Escalation | Protocol `EMP-YYYYMMDD-XXXXXX`; the record (reason, summary, order id, contact, session) goes to a local JSONL outbox that is gitignored. |
