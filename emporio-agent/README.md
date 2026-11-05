@@ -14,7 +14,7 @@ instruments store in Campo Grande/MS, using the store's data (CSVs) and its poli
 - [x] Policy sections and policy lookup
 - [x] Agent tools with order verification
 - [x] System prompt, LLM adapter and agent loop
-- [ ] CLI chat with persistent sessions
+- [x] CLI chat with persistent sessions
 - [ ] Scenario suite
 - [ ] Example conversations
 - [ ] (Optional) FastAPI endpoint
@@ -30,6 +30,8 @@ python -m venv .venv
 .venv\Scripts\activate            # Windows (on macOS/Linux: source .venv/bin/activate)
 pip install -r requirements.txt   # also installs the project in editable mode
 
+python -m emporio chat                     # chat in the terminal (new session)
+python -m emporio chat SESSION_ID          # resume a session; /reset clears it, /quit exits
 pytest -q                                  # unit tests (no network, no API key needed)
 pytest -m llm -s                           # smoke checks against the real model (needs a key)
 ruff check .                               # lint
@@ -163,3 +165,14 @@ errors and LLM failures never crash the chat; a refusal gets a polite fixed repl
 | Tool execution | Requested tools run one after another: they are local and take milliseconds, so threads would add a race on the verification counter for no gain. All results still go back in a single message, as the API expects. |
 | Prompt | English instructions, Portuguese replies. Store facts needed in almost every chat (address, contacts, scope) live in the prompt; everything else must come from a tool. Rules cover the data-vs-policy decision, promotions, unavailable items, returns, delays, complaints, accessories, off-topic requests, privacy and prompt injection, plus a line that keeps the rules in force when a customer insists. Plain text only, since WhatsApp does not render Markdown. |
 | Testability | `FakeLLM` replays scripted responses, so the loop is tested without network. Real-model checks are marked `llm` and deselected by default. |
+
+### CLI and conversation history
+
+| Decision | Choice and reason |
+|---|---|
+| Interface | A terminal REPL (`python -m emporio chat`): the challenge asks for a working agent, not a UI, and a reviewer can run it with one command. `SHOW_TOOLS=1` prints every tool call and a preview of its result. |
+| Persistence | One JSONL file per session in `data/sessions/` (gitignored), one message per line. The session id plays the role of the customer's WhatsApp number: the same id resumes the conversation after a restart. JSONL is append-only, human-readable and needs no database at this scale. |
+| What is stored | Each message with a timestamp; assistant lines also log the turn's tool calls and results, token usage, stop reason and latency (an audit trail for debugging). Only role and content are sent back to the model. |
+| Context window | The last 20 messages, starting with a customer message. Because tool data never enters the stored history, a tool call can never be separated from its result. |
+| Lockout across restarts | The failed order verifications are counted from the session log on load, so closing and reopening the chat does not reset the 3-attempt lockout. `/reset` starts a new conversation and does reset it. |
+| Session ids | Only letters, digits, `-` and `_` (1 to 64 characters), since the id becomes a file name; this blocks path traversal such as `../`. |
