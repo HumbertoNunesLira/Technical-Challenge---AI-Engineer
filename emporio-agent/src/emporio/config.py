@@ -25,6 +25,11 @@ DEFAULT_EFFORT = "medium"  # Claude Haiku 5.5 default; low | medium | high | xhi
 # it is a safety ceiling, not a reply-length target. Reply length is set by the prompt.
 MAX_TOKENS = 16000
 
+# Abuse limits, shared by the CLI and the API.
+MAX_MESSAGE_LENGTH = 1000  # characters per customer message
+RATE_LIMIT_MESSAGES = 10  # messages per session...
+RATE_LIMIT_WINDOW_S = 60  # ...per rolling window (API only)
+
 
 def llm_provider() -> str:
     return (os.getenv("LLM_PROVIDER") or DEFAULT_PROVIDER).strip().lower()

@@ -135,6 +135,13 @@ def test_cli_resumes_and_says_so(store, tmp_path):
     assert any("Retomando conversa com 2 mensagens" in line for line in output)
 
 
+def test_cli_rejects_overlong_messages(store):
+    output, llm = [], FakeLLM([])
+    run_chat("cli3", llm=llm, store=store, read=scripted_input(["x" * 1001]), write=output.append)
+    assert any("Mensagem muito longa" in line for line in output)
+    assert llm.requests == []  # never sent to the model
+
+
 def test_main_rejects_unsafe_session_id(capsys):
     assert main(["chat", "../hack"]) == 2
     assert "Session id" in capsys.readouterr().out

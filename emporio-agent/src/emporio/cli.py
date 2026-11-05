@@ -54,6 +54,9 @@ def run_chat(
             break
         if not message:
             continue
+        if len(message) > config.MAX_MESSAGE_LENGTH:
+            write(f"(Mensagem muito longa: o limite é {config.MAX_MESSAGE_LENGTH} caracteres.)")
+            continue
         if message.lower() in QUIT_COMMANDS:
             break
         if message.lower() == RESET_COMMAND:
